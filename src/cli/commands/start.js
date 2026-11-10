@@ -68,8 +68,11 @@ export async function start(args) {
 
   const env = { ...process.env, ANTHROPIC_BASE_URL: `http://127.0.0.1:${status.port}` };
   delete env.ANTHROPIC_AUTH_TOKEN;
+  delete env.ANTHROPIC_API_KEY;
   delete env.CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY;
-  env.ANTHROPIC_CUSTOM_HEADERS = `x-openclaude-token: ${await loadRouterToken()}`;
+  const customHeaders = (env.ANTHROPIC_CUSTOM_HEADERS || "").split(/\\r?\\n/).filter((line) => line.split(":", 1)[0].trim().toLowerCase() !== "x-openclaude-token");
+  customHeaders.push(`x-openclaude-token: ${await loadRouterToken()}`);
+  env.ANTHROPIC_CUSTOM_HEADERS = customHeaders.filter(Boolean).join("\\n");
   const bindings = [];
 
   function bindAlias(prefix, slotName, m) {
