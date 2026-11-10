@@ -148,7 +148,6 @@ The default config ships `ollama-cloud` with `apiKey: "$OLLAMA_API_KEY"`; the ro
 | ------------------------------ | ----------------------------------------------------------- |
 | `oc start`                     | Boot router (if needed); exec `claude` with router env set. |
 | `oc start --bridge=aggressive` | Also bind Sonnet+Opus picker slots to Ollama (3 slots vs 1).|
-| `oc start --no-discovery`      | Don't set the AUTH_TOKEN sentinel; alias slots only.        |
 | `oc stop`                      | Shut down the router daemon.                                |
 | `oc status`                    | Show daemon state + configured providers.                   |
 | `oc list`                      | List installed Ollama models with paste-ready /model lines. |
@@ -223,7 +222,6 @@ Node's built-in test runner covers `parseModelTarget` routing; a real-router-vs-
 - **`tool_choice` forcing isn't supported** by Ollama's Anthropic-compat layer; some models may degrade tool-use behavior.
 - **Synthesized `tool_use` blocks** (from an orphan `input_json_delta` with no preceding start) get a placeholder `id` and `name: "unknown"` — the call still executes parser-side but downstream tool routing may fail. Vision/text deltas have no such caveat.
 - Only `anthropic-passthrough` and `ollama` provider types are supported today. OpenAI / OpenRouter / Bedrock / Vertex are deferred (the abstraction is ready).
-- **Discovery mode disables Remote Control / `/schedule` / claude.ai MCP / notification prefs** for the session (a Claude Code requirement). Use `--no-discovery` to keep them.
 
 ## Status
 
