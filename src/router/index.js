@@ -153,8 +153,8 @@ async function handleMessages(req, res, cfg, upstreamPath = "/v1/messages") {
   }
 }
 
-export async function createRouter() {
-  await loadRouterToken();
+export async function createRouter({ token }) {
+  if (typeof token !== "string" || token.length < 32) throw new Error("A per-run router token is required");
   let cfg = await loadConfig();
   const reload = async () => {
     try { cfg = await loadConfig(); } catch (err) { log("config reload failed:", err.message); }
@@ -166,14 +166,14 @@ export async function createRouter() {
       const url = new URL(req.url, "http://localhost");
       log(`<- ${req.method} ${url.pathname} (ua=${(req.headers["user-agent"] || "").slice(0, 40)})`);
       if (req.method === "POST" && (url.pathname === "/v1/messages" || url.pathname === "/v1/messages/count_tokens")) {
-        if (!(await isAuthorizedLocalRequest(req.headers))) return sendJson(res, 401, { type: "error", error: { type: "authentication_error", message: "Missing or invalid local router token" } });
+        if (!(await isAuthorizedLocalRequest(req.headers, token))) return sendJson(res, 401, { type: "error", error: { type: "authentication_error", message: "Missing or invalid local router token" } });
         return await handleMessages(req, res, cfg, url.pathname);
       }
       // count_tokens runs the same provider routing as /v1/messages and is intended
       // for the anthropic-passthrough path. A model that resolves to a non-Anthropic
       // provider (e.g. ollama-local) will forward to a backend with no such endpoint.
       if (req.method === "GET" && url.pathname === "/openclaude/status") {
-        if (!(await isAuthorizedLocalRequest(req.headers))) return sendJson(res, 401, { error: "unauthorized" });
+        if (!(await isAuthorizedLocalRequest(req.headers, token))) return sendJson(res, 401, { error: "unauthorized" });
         return sendJson(res, 200, { ok: true, providers: Object.keys(cfg.providers ?? {}) });
       }
       // HEAD / is Claude Code's reachability probe — answer 200.
@@ -201,7 +201,7 @@ export async function createRouter() {
   return { server, getConfig: () => cfg };
 }
 
-export async function startRouter(port) {
+export async function startRouter(port = 0, token) {
   // The router runs detached with no supervisor to restart it, so a single
   // unhandled error must not be fatal — otherwise every later request from
   // Claude Code fails with a connection error until the user restarts. Log and
@@ -213,18 +213,20 @@ export async function startRouter(port) {
     log("uncaughtException:", err?.stack ?? err);
   });
 
-  const { server, getConfig } = await createRouter();
-  const listenPort = port ?? getConfig().port ?? 11436;
+  const { server } = await createRouter({ token });
+  const listenPort = port ?? 0;
   await new Promise((resolve, reject) => {
     server.once("error", reject);
     server.listen(listenPort, "127.0.0.1", () => resolve());
   });
-  log(`listening on http://127.0.0.1:${listenPort}`);
-  return { server, port: listenPort };
+  const address = server.address();
+  const actualPort = typeof address === "object" && address ? address.port : listenPort;
+  log(`listening on http://127.0.0.1:${actualPort}`);
+  return { server, port: actualPort };
 }
 
 const isMain = import.meta.url === `file://${process.argv[1]}`;
 if (isMain) {
-  const port = process.env.OPENCLAUDE_PORT ? Number(process.env.OPENCLAUDE_PORT) : undefined;
-  startRouter(port).catch((err) => { console.error(err); process.exit(1); });
+  console.error("The router is an internal per-session service; launch it through openclaude run.");
+  process.exit(2);
 }
