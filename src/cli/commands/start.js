@@ -70,9 +70,9 @@ export async function start(args) {
   delete env.ANTHROPIC_AUTH_TOKEN;
   delete env.ANTHROPIC_API_KEY;
   delete env.CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY;
-  const customHeaders = (env.ANTHROPIC_CUSTOM_HEADERS || "").split(/\\r?\\n/).filter((line) => line.split(":", 1)[0].trim().toLowerCase() !== "x-openclaude-token");
+  const customHeaders = (env.ANTHROPIC_CUSTOM_HEADERS || "").split(/\r?\n/).filter((line) => line.split(":", 1)[0].trim().toLowerCase() !== "x-openclaude-token");
   customHeaders.push(`x-openclaude-token: ${await loadRouterToken()}`);
-  env.ANTHROPIC_CUSTOM_HEADERS = customHeaders.filter(Boolean).join("\\n");
+  env.ANTHROPIC_CUSTOM_HEADERS = customHeaders.filter(Boolean).join("\n");
   const bindings = [];
 
   function bindAlias(prefix, slotName, m) {
