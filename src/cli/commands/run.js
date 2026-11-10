@@ -71,14 +71,6 @@ export async function run(args) {
   // A fresh, unpersisted capability token and port for every invocation.
   const token = randomBytes(32).toString("hex");
   const router = await startRouter(0, token);
-  const { env, warnings } = createClaudeEnvironment(process.env, router.port, token, models, cfg);
-  for (const warning of warnings) console.error("[openclaude] WARNING: " + warning);
-  for (const model of models.slice(1)) {
-    console.error("[openclaude] Additional allowlisted model: /model ollama-local:" + model.name);
-  }
-  console.error("[openclaude] private session router listening on 127.0.0.1:" + router.port);
-  console.error("[openclaude] allowlisted Ollama models: " + (models.map((m) => m.name).join(", ") || "(none)"));
-
   let child;
   const signals = ["SIGINT", "SIGTERM", "SIGHUP"];
   const onSignal = (signal) => {
@@ -92,9 +84,18 @@ export async function run(args) {
       router.server.closeAllConnections?.();
     });
   };
-
-  for (const signal of signals) process.on(signal, onSignal);
+  let signalsRegistered = false;
   try {
+    const { env, warnings } = createClaudeEnvironment(process.env, router.port, token, models, cfg);
+    for (const warning of warnings) console.error("[openclaude] WARNING: " + warning);
+    for (const model of models.slice(1)) {
+      console.error("[openclaude] Additional allowlisted model: /model ollama-local:" + model.name);
+    }
+    console.error("[openclaude] private session router listening on 127.0.0.1:" + router.port);
+    console.error("[openclaude] allowlisted Ollama models: " + (models.map((m) => m.name).join(", ") || "(none)"));
+
+    for (const signal of signals) process.on(signal, onSignal);
+    signalsRegistered = true;
     child = spawn("claude", args, { stdio: "inherit", env });
     await new Promise((resolve) => {
       let settled = false;
@@ -114,7 +115,9 @@ export async function run(args) {
       });
     });
   } finally {
-    for (const signal of signals) process.off(signal, onSignal);
+    if (signalsRegistered) {
+      for (const signal of signals) process.off(signal, onSignal);
+    }
     await closeRouter();
   }
 }
