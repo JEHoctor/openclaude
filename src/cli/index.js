@@ -35,7 +35,7 @@ if (!cmd || cmd === "-h" || cmd === "--help" || cmd === "help") {
 }
 const handler = COMMANDS[cmd];
 if (!handler) {
-  console.error("unknown command: " + cmd + "\\n");
+  console.error("unknown command: " + cmd + "\n");
   console.error(HELP);
   process.exit(2);
 }
