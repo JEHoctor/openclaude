@@ -16,7 +16,7 @@ test("wrapper isolates routing and token to child environment", () => {
     PATH: "/usr/bin",
     ANTHROPIC_AUTH_TOKEN: "inherited-token",
     ANTHROPIC_API_KEY: "inherited-key",
-    ANTHROPIC_CUSTOM_HEADERS: "x-user-header: keep\\nx-openclaude-token: stale",
+    ANTHROPIC_CUSTOM_HEADERS: "x-user-header: keep\nx-openclaude-token: stale",
   };
   const models = [{ name: "qwen2.5:7b", family: "qwen", parameter_size: "7B" }];
   const { env } = createClaudeEnvironment(parent, 43210, "a".repeat(64), models, cfg);
