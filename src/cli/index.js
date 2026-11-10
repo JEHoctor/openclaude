@@ -1,56 +1,48 @@
-import { start } from "./commands/start.js";
-import { stop } from "./commands/stop.js";
-import { status } from "./commands/status.js";
-import { list } from "./commands/list.js";
+import { run } from "./commands/run.js";
 import { modelSubagent } from "./commands/model-subagent.js";
 import { modelInternalClassifier } from "./commands/model-internal-classifier.js";
 
 const HELP = `openclaude — multi-provider router for Claude Code
 
 Usage:
-  openclaude start [-- claude args...]   Boot router daemon and exec into claude
-  openclaude start --bridge=aggressive   Bind Sonnet+Opus aliases to Ollama too (3 slots vs 1)
-  openclaude stop                        Shut down the router daemon
-  openclaude status                      Show router state and providers
-  openclaude list                        List installed Ollama models with /model commands
+  openclaude run [claude args...]        Run Claude Code with isolated OpenClaude routing
+  openclaude shell-init                  Print a bash/zsh alias for oclaude
   openclaude model-subagent              Show/select subagent model for Claude Code
-  openclaude model-subagent <n>          Set subagent model (takes effect on next 'oc start')
-  openclaude internal-classifier         Show/select model for Claude Code's safety classifier
-  openclaude internal-classifier <n>     Set classifier model (default: Anthropic Haiku)
+  openclaude model-subagent <n>          Set subagent model for the next run
+  openclaude internal-classifier         Show/select Claude Code background model
 
 Notes:
-  - Authentication: Claude Code's normal OAuth subscription is preserved.
-    The router forwards the Authorization header to api.anthropic.com untouched.
-  - The /model picker shows ONE Ollama model by default (the Custom slot).
-    For more, paste "/model ollama-local:<name>" into /model — these don't
-    show display names but they work.
-  - internal-classifier overrides Claude Code's built-in Haiku model used for
-    safety classification and background tasks. Useful when Anthropic limits
-    are exhausted or when running fully offline.
+  - The normal claude command is unaffected.
+  - Each run uses a fresh localhost port and an in-memory random router token.
+  - Only exact model names in ollamaAllowedModels in ~/.openclaude/config.json are exposed and routed.
+  - The first allowlisted model appears in the Custom picker slot; additional models can be selected by name.
 
-Config: ~/.openclaude/config.json (auto-seeded).
+Config: ~/.openclaude/config.json
 `;
 
-const COMMANDS = { start, stop, status, list, "model-subagent": modelSubagent, "internal-classifier": modelInternalClassifier, help: () => console.log(HELP) };
+const COMMANDS = {
+  run,
+  "shell-init": () => console.log("alias oclaude='openclaude run'"),
+  "model-subagent": modelSubagent,
+  "internal-classifier": modelInternalClassifier,
+  help: () => console.log(HELP),
+};
 
 const [, , cmd, ...rest] = process.argv;
-
 if (!cmd || cmd === "-h" || cmd === "--help" || cmd === "help") {
   console.log(HELP);
   process.exit(0);
 }
-
 const handler = COMMANDS[cmd];
 if (!handler) {
-  console.error(`unknown command: ${cmd}\n`);
+  console.error("unknown command: " + cmd + "\n");
   console.error(HELP);
   process.exit(2);
 }
-
 try {
   await handler(rest);
 } catch (err) {
-  console.error(`error: ${err.message}`);
+  console.error("error: " + err.message);
   if (process.env.OPENCLAUDE_DEBUG) console.error(err.stack);
   process.exit(1);
 }

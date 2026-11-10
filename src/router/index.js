@@ -1,27 +1,9 @@
 import { createServer } from "node:http";
-import { loadConfig, parseModelTarget, interpolateEnv } from "./config.js";
-import { listLocalOllamaModels } from "../cli/ollama.js";
+import { loadConfig, parseModelTarget } from "./config.js";
+import { isAuthorizedLocalRequest } from "./auth.js";
 import { sanitizeToolIds, sanitizeThinkingBlocks } from "./sanitize.js";
 import * as anthropicPassthrough from "./provider/anthropic-passthrough.js";
 import * as ollama from "./provider/ollama.js";
-
-// Claude Code's discovery filter only keeps /v1/models entries whose id starts
-// with "claude" or "anthropic". So Ollama entries are exposed as
-// "claude-ol-<provider>-<model>" — readable enough that the chat display
-// (which echoes the raw id) still tells you which model is active.
-const OLLAMA_DISCOVERY_PREFIX = "claude-ol-";
-
-function ollamaDiscoveryId(providerId, modelName) {
-  // No encoding — colons and dots are valid in Anthropic model ids
-  // (e.g. "claude-opus-4-7[1m]"), and Claude Code passes user-typed strings
-  // through unvalidated.
-  return `${OLLAMA_DISCOVERY_PREFIX}${providerId}:${modelName}`;
-}
-
-function decodeOllamaDiscoveryId(model) {
-  if (typeof model !== "string" || !model.startsWith(OLLAMA_DISCOVERY_PREFIX)) return null;
-  return model.slice(OLLAMA_DISCOVERY_PREFIX.length); // → "<provider>:<model>"
-}
 
 const PROVIDER_IMPL = {
   "anthropic-passthrough": anthropicPassthrough,
@@ -66,11 +48,6 @@ async function handleMessages(req, res, cfg, upstreamPath = "/v1/messages") {
     return sendJson(res, 400, { type: "error", error: { type: "invalid_request_error", message: "missing model" } });
   }
 
-  // Strip the claude-ol- discovery prefix if present, so an entry chosen from
-  // gateway-discovered /v1/models routes correctly.
-  const decoded = decodeOllamaDiscoveryId(body.model);
-  if (decoded) body.model = decoded;
-
   // Clean up any tool_use ids in the conversation history that were generated
   // by upstreams with looser id rules (e.g. Ollama's compat layer may emit
   // ids containing dots/colons that Anthropic rejects).
@@ -91,6 +68,9 @@ async function handleMessages(req, res, cfg, upstreamPath = "/v1/messages") {
 
   const { providerId, modelId } = parseModelTarget(body.model, cfg);
   const provider = cfg.providers?.[providerId];
+  if (provider?.type === "ollama" && !(cfg.ollamaAllowedModels ?? []).includes(modelId)) {
+    return sendJson(res, 403, { type: "error", error: { type: "permission_error", message: `Ollama model "${modelId}" is not in ollamaAllowedModels` } });
+  }
   if (!provider) {
     return sendJson(res, 400, { type: "error", error: { type: "invalid_request_error", message: `Unknown provider "${providerId}" — check ${cfg.configPath ?? "config.json"}` } });
   }
@@ -176,43 +156,8 @@ async function handleMessages(req, res, cfg, upstreamPath = "/v1/messages") {
   }
 }
 
-// Build the /v1/models response Claude Code consumes during gateway discovery.
-// Each Ollama model from each ollama-typed provider becomes one picker entry.
-// The id MUST start with "claude" or "anthropic" to survive Claude Code's
-// discovery filter, hence the OLLAMA_DISCOVERY_PREFIX wrapper.
-async function handleModels(_req, res, cfg) {
-  log("← /v1/models discovery");
-  const data = [];
-  const date = new Date().toISOString();
-
-  for (const [providerId, provider] of Object.entries(cfg.providers ?? {})) {
-    if (provider.type !== "ollama") continue;
-    // If a provider declared an apiKey template (e.g. "$OLLAMA_API_KEY") but
-    // the env var is unset, the provider would 401 on every call. Skip it
-    // entirely so we don't pollute the picker with unreachable entries.
-    if (provider.apiKey && !interpolateEnv(provider.apiKey)) {
-      log(`skipping discovery for "${providerId}" — apiKey template "${provider.apiKey}" resolves to empty`);
-      continue;
-    }
-    let models = [];
-    try { models = await listLocalOllamaModels(provider.baseUrl); } catch { /* offline ok */ }
-    for (const m of models) {
-      const id = ollamaDiscoveryId(providerId, m.name);
-      data.push({
-        type: "model",
-        id,
-        display_name: `${m.name} (${providerId})`,
-        description: `${providerId} · ${m.parameter_size ?? ""} ${m.family ?? ""}`.trim(),
-        created_at: date,
-      });
-    }
-  }
-
-  log(`← /v1/models: returned ${data.length} entries`);
-  sendJson(res, 200, { data, has_more: false, first_id: data[0]?.id ?? null, last_id: data.at(-1)?.id ?? null });
-}
-
-export async function createRouter() {
+export async function createRouter({ token }) {
+  if (typeof token !== "string" || token.length < 32) throw new Error("A per-run router token is required");
   let cfg = await loadConfig();
   const reload = async () => {
     try { cfg = await loadConfig(); } catch (err) { log("config reload failed:", err.message); }
@@ -223,13 +168,15 @@ export async function createRouter() {
     try {
       const url = new URL(req.url, "http://localhost");
       log(`<- ${req.method} ${url.pathname} (ua=${(req.headers["user-agent"] || "").slice(0, 40)})`);
-      if (req.method === "POST" && url.pathname === "/v1/messages") return await handleMessages(req, res, cfg);
+      if (req.method === "POST" && (url.pathname === "/v1/messages" || url.pathname === "/v1/messages/count_tokens")) {
+        if (!(await isAuthorizedLocalRequest(req.headers, token))) return sendJson(res, 401, { type: "error", error: { type: "authentication_error", message: "Missing or invalid local router token" } });
+        return await handleMessages(req, res, cfg, url.pathname);
+      }
       // count_tokens runs the same provider routing as /v1/messages and is intended
       // for the anthropic-passthrough path. A model that resolves to a non-Anthropic
       // provider (e.g. ollama-local) will forward to a backend with no such endpoint.
-      if (req.method === "POST" && url.pathname === "/v1/messages/count_tokens") return await handleMessages(req, res, cfg, "/v1/messages/count_tokens");
-      if (req.method === "GET" && (url.pathname === "/v1/models" || url.pathname === "/models")) return await handleModels(req, res, cfg);
       if (req.method === "GET" && url.pathname === "/openclaude/status") {
+        if (!(await isAuthorizedLocalRequest(req.headers, token))) return sendJson(res, 401, { error: "unauthorized" });
         return sendJson(res, 200, { ok: true, providers: Object.keys(cfg.providers ?? {}) });
       }
       // HEAD / is Claude Code's reachability probe — answer 200.
@@ -257,30 +204,23 @@ export async function createRouter() {
   return { server, getConfig: () => cfg };
 }
 
-export async function startRouter(port) {
-  // The router runs detached with no supervisor to restart it, so a single
-  // unhandled error must not be fatal — otherwise every later request from
-  // Claude Code fails with a connection error until the user restarts. Log and
-  // keep serving instead of letting Node exit on an unhandled rejection.
-  process.on("unhandledRejection", (reason) => {
-    log("unhandledRejection:", reason instanceof Error ? reason.stack : reason);
-  });
-  process.on("uncaughtException", (err) => {
-    log("uncaughtException:", err?.stack ?? err);
-  });
-
-  const { server, getConfig } = await createRouter();
-  const listenPort = port ?? getConfig().port ?? 11436;
+export async function startRouter(port = 0, token) {
+  // The router shares the wrapper's process. Request-level failures are handled
+  // by the HTTP handler; process-wide exception handlers would mask fatal bugs.
+  const { server } = await createRouter({ token });
+  const listenPort = port ?? 0;
   await new Promise((resolve, reject) => {
     server.once("error", reject);
     server.listen(listenPort, "127.0.0.1", () => resolve());
   });
-  log(`listening on http://127.0.0.1:${listenPort}`);
-  return { server, port: listenPort };
+  const address = server.address();
+  const actualPort = typeof address === "object" && address ? address.port : listenPort;
+  log(`listening on http://127.0.0.1:${actualPort}`);
+  return { server, port: actualPort };
 }
 
 const isMain = import.meta.url === `file://${process.argv[1]}`;
 if (isMain) {
-  const port = process.env.OPENCLAUDE_PORT ? Number(process.env.OPENCLAUDE_PORT) : undefined;
-  startRouter(port).catch((err) => { console.error(err); process.exit(1); });
+  console.error("The router is an internal per-session service; launch it through openclaude run.");
+  process.exit(2);
 }

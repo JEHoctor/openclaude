@@ -3,11 +3,8 @@
 // model (or back to the Anthropic default). The logic is identical aside from
 // the config key, active-file name, default label, and a few strings.
 
-import { loadConfig, saveConfig, parseModelTarget, paths } from "../../router/config.js";
+import { loadConfig, saveConfig, parseModelTarget } from "../../router/config.js";
 import { listLocalOllamaModels } from "../ollama.js";
-import { getDaemonStatus } from "../daemon.js";
-import { readFile, writeFile } from "node:fs/promises";
-import { join } from "node:path";
 import { createInterface } from "node:readline";
 import { stdin, stdout } from "node:process";
 
@@ -20,8 +17,6 @@ export const ANTHROPIC_MODELS = [
 // selectors all agree on the names (and don't drift apart as strings).
 export const SUBAGENT_ACTIVE_FILENAME = "subagent-active";
 export const CLASSIFIER_ACTIVE_FILENAME = "internal-classifier-active";
-export const SUBAGENT_ACTIVE_FILE = join(paths.dir, SUBAGENT_ACTIVE_FILENAME);
-export const CLASSIFIER_ACTIVE_FILE = join(paths.dir, CLASSIFIER_ACTIVE_FILENAME);
 
 export function createModelSelector({
   configKey,
@@ -33,7 +28,6 @@ export function createModelSelector({
   setMessageLabel,
   headerLines,
 }) {
-  const activeFile = join(paths.dir, activeFileName);
 
   function buildModelList(ollamaModels) {
     const entries = [{ id: null, label: defaultMenuLabel }];
@@ -59,15 +53,6 @@ export function createModelSelector({
       }
     }
     return { envValue: configuredModel, warning: null };
-  }
-
-  async function readActive() {
-    try {
-      const raw = await readFile(activeFile, "utf8");
-      return raw.trim() || null;
-    } catch {
-      return null;
-    }
   }
 
   function printMenu(entries, configuredId) {
@@ -99,19 +84,8 @@ export function createModelSelector({
   }
 
   async function showStatus(configured) {
-    const configuredLabel = configured ?? defaultLabel;
-    console.log(`Configured: ${configuredLabel}`);
-    const daemon = await getDaemonStatus();
-    if (daemon.running) {
-      const active = await readActive();
-      const activeLabel = active ?? defaultLabel;
-      console.log(`Active:     ${activeLabel}`);
-      if (configured !== active) {
-        console.log(`  ↑ configured value is pending — restart oc to apply`);
-      }
-    } else {
-      console.log(`Active:     (no active session)`);
-    }
+    console.log(`Configured: ${configured ?? defaultLabel}`);
+    console.log("Active:     evaluated when the next openclaude run starts");
   }
 
   function parseInput(input, entries) {
@@ -126,7 +100,7 @@ export function createModelSelector({
   async function promptForSelection(entries, configured) {
     const isTty = stdout.isTTY && stdin.isTTY;
     if (!isTty) {
-      console.log(`Stdin is not a TTY. Run 'oc ${cliName} <number>' to select.`);
+      console.log(`Stdin is not a TTY. Run 'openclaude ${cliName} <number>' to select.`);
       return null;
     }
 
@@ -147,7 +121,7 @@ export function createModelSelector({
     if (index < 0 || index >= entries.length) {
       console.error(`Invalid selection: ${answer}`);
       printMenu(entries, configured);
-      console.log(`Run 'oc ${cliName} <number>' to select.`);
+      console.log(`Run 'openclaude ${cliName} <number>' to select.`);
       process.exit(1);
     }
     return index;
@@ -156,7 +130,9 @@ export function createModelSelector({
   async function command(args) {
     const cfg = await loadConfig();
     const ollamaBase = cfg.providers?.["ollama-local"]?.baseUrl || "http://127.0.0.1:11434";
-    const ollamaModels = await listLocalOllamaModels(ollamaBase);
+    const installed = await listLocalOllamaModels(ollamaBase);
+    const allowed = new Set(cfg.ollamaAllowedModels ?? []);
+    const ollamaModels = installed.filter((model) => allowed.has(model.name));
     const entries = buildModelList(ollamaModels);
     const configured = cfg[configKey] ?? null;
 
@@ -185,8 +161,7 @@ export function createModelSelector({
     const { cfg: newCfg, label } = applySelection(cfg, entries, index);
     await saveConfig(newCfg);
     console.log(`${setMessageLabel} model set to ${label}.`);
-    await writeFile(activeFile, entries[index].id || "");
-    console.log("Change saved. Takes effect on next 'oc start'.");
+    console.log("Change saved. Takes effect on next 'openclaude run'.");
   }
 
   return { resolveModel, command, defaultLabel };
