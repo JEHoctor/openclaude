@@ -68,6 +68,9 @@ async function handleMessages(req, res, cfg, upstreamPath = "/v1/messages") {
 
   const { providerId, modelId } = parseModelTarget(body.model, cfg);
   const provider = cfg.providers?.[providerId];
+  if (provider?.type === "ollama" && providerId === "ollama-local" && !(cfg.ollamaAllowedModels ?? []).includes(modelId)) {
+    return sendJson(res, 403, { type: "error", error: { type: "permission_error", message: `Ollama model "${modelId}" is not in ollamaAllowedModels` } });
+  }
   if (!provider) {
     return sendJson(res, 400, { type: "error", error: { type: "invalid_request_error", message: `Unknown provider "${providerId}" — check ${cfg.configPath ?? "config.json"}` } });
   }
