@@ -6,7 +6,7 @@
 
 > **One Claude Code session, every model.** Keep your Anthropic Claude subscription for the main chat and route subagents, background tasks, or whole conversations to **local or cloud Ollama** models — all from the same `/model` picker, without leaving Claude Code.
 
-openclaude is a tiny router that sits between the `claude` CLI and the model backends. Your Claude subscription auth is forwarded untouched; everything Ollama is auto-discovered and dispatched by name. No API keys to juggle, no build step — just Node.
+openclaude is a small wrapper around the `claude` CLI. The ordinary `claude` command is untouched; `openclaude run` starts an isolated Claude Code process with a per-run local router, a fresh in-memory authentication token, and only the Ollama models you explicitly allowlist.
 
 ![openclaude /model picker screenshot](openclaude.png)
 
@@ -18,42 +18,27 @@ openclaude is a tiny router that sits between the `claude` CLI and the model bac
 # 1. Install
 npm install -g @aliildan/openclaude
 
-# 2. (optional) make sure Ollama is running with at least one model
-ollama serve &
-ollama pull qwen2.5-coder
+# 2. Pull the model you intend to expose
+ollama pull qwen2.5-coder:7b
 
-# 3. Boot the router and drop into Claude Code
-oc start
+# 3. Add its exact Ollama model name to ~/.openclaude/config.json:
+#    "ollamaAllowedModels": ["qwen2.5-coder:7b"]
+
+# 4. Run Claude Code through the isolated wrapper
+openclaude run
+
+# Optional: print the alias line to add to ~/.bashrc or ~/.zshrc
+openclaude shell-init
 ```
 
-`oc start` prints what it wired up, then execs `claude`:
+`openclaude run` starts a private router on an ephemeral localhost port, generates a random per-session token in memory, and launches `claude` with only the wrapper-specific environment overrides. The router is shut down when Claude exits. `openclaude shell-init` prints `alias oclaude='openclaude run'`; add that line to your shell rc file and use `oclaude` when you want the wrapped session. The regular `claude` command remains unchanged.
 
-```
-[openclaude] router on http://127.0.0.1:11436
-[openclaude] found 3 Ollama model(s):
-  - qwen2.5-coder:7b
-  - gemma4:31b-cloud
-  - llama3.2:3b
-[openclaude] mode: conservative (safe) · discovery: ON (all Ollama models in /model)
-[openclaude] /model picker bindings (friendly names):
-  (Custom) → qwen2.5-coder:7b
-  Default + Sonnet + Opus + Haiku → real Anthropic via your subscription
-```
-
-Then inside Claude Code:
-
-```
-/model
-# pick any Ollama entry (auto-discovered) or the (Custom) slot
-# or paste a raw "/model ollama-local:<name>" command
-```
-
-Upgrade any time with `npm install -g @aliildan/openclaude@latest`. The package is scoped (`@aliildan/openclaude`), but the commands stay `oc` / `openclaude`, and `oc start` works from any directory on Linux, macOS, and Windows.
+Upgrade any time with `npm install -g @aliildan/openclaude@latest`. The package is scoped (`@aliildan/openclaude`), but the commands stay `oc` / `openclaude`, and `openclaude run` works from any directory on Linux, macOS, and Windows.
 
 ## Features
 
 - **🔌 Keep your Claude subscription** — Claude Code's OAuth bearer is forwarded to `api.anthropic.com` untouched. No `ANTHROPIC_API_KEY` required.
-- **🧩 Every Ollama model in `/model`** — auto-discovered from your Ollama install and selectable like any other model in the picker.
+- **🧩 Explicit Ollama allowlist** — only exact model names in `ollamaAllowedModels` are visible and routable in the wrapped session.
 - **☁️ Frontier open-weight models without a GPU** — route to [Ollama Cloud](https://ollama.com/cloud) (`gpt-oss:120b`, `qwen3:480b`, `deepseek-v3.1:671b`, `kimi-k2:1t`, …) through the same workflow.
 - **💸 Cheap subagents** — send the Explore / Plan / general-purpose subagents to a local model while your main conversation stays on Anthropic Claude.
 - **🛡️ Cross-provider safety** — sanitizes tool-use ids, thinking-block signatures, images, and malformed SSE streams so switching models mid-conversation just works.
@@ -64,7 +49,7 @@ Upgrade any time with `npm install -g @aliildan/openclaude@latest`. The package 
 ```
 ┌──────────────┐  ANTHROPIC_BASE_URL      ┌────────────────────┐
 │ claude (CLI) │ ────────────────────────►│ openclaude router  │
-│  /model      │  Authorization passed    │  127.0.0.1:11436   │
+│  /model      │  Authorization passed    │  ephemeral 127.0.0.1 port   │
 └──────────────┘  through                 └─────────┬──────────┘
                                                     │ parse "provider:modelId"
                                   ┌─────────────────┼─────────────────┐
@@ -83,15 +68,15 @@ When you select a model in `/model`:
 
 openclaude does not read Claude Code's credential file or macOS Keychain, and it never substitutes or stores your Anthropic OAuth token. Claude Code authenticates to Anthropic using its own normal subscription session; openclaude forwards those upstream authorization headers unchanged.
 
-The router also requires a separate random local-hop token on inference and status requests. It is generated once in `~/.openclaude/router.token` with mode `0600` and supplied to Claude Code using `ANTHROPIC_CUSTOM_HEADERS` (Claude Code ≥ v2.1.227). The token is not forwarded to Anthropic or Ollama. The listener remains bound to `127.0.0.1`.
+Each `openclaude run` creates a router on an ephemeral localhost port and generates a fresh random local-hop token held only in the wrapper and child-process environment. It is supplied to Claude Code using `ANTHROPIC_CUSTOM_HEADERS`; it is not written to disk or forwarded to Anthropic or Ollama. The router closes when the session exits. The normal `claude` process environment and configuration are not modified.
 
-Model discovery is deliberately disabled. This avoids the sentinel-token workaround, credential-store access, and associated feature restrictions. The Custom picker slot remains available for one Ollama model; other models can be selected by entering `/model ollama-local:<name>`.
+Model discovery is deliberately disabled. Only exact names in `ollamaAllowedModels` are exposed and permitted by the router. The first installed allowlisted model occupies the Custom picker slot; other allowlisted models can be selected with `/model ollama-local:<name>`. The allowlist is enforced server-side too, so manually typing an unlisted model name is rejected.
 
 ## Guides
 
 ### Subagent model — cheaper background work
 
-Claude Code's Explore, Plan, and general-purpose subagents can be expensive because they read many files and digest verbose output. `oc model-subagent` redirects subagent traffic to a cheaper model (like a local Ollama model) while keeping your main conversation on Anthropic Claude.
+Claude Code's Explore, Plan, and general-purpose subagents can be expensive because they read many files and digest verbose output. `openclaude model-subagent` selects an allowlisted local model for subagent traffic to a cheaper model (like a local Ollama model) while keeping your main conversation on Anthropic Claude.
 
 ```bash
 oc model-subagent          # show current setting + available models
@@ -99,7 +84,7 @@ oc model-subagent 2        # select a model by number
 oc model-subagent 0        # reset to Anthropic default (or: oc model-subagent default)
 ```
 
-**How it works:** `oc model-subagent` writes a `subagentModel` key to `~/.openclaude/config.json`. On the next `oc start`, the router sets `CLAUDE_CODE_SUBAGENT_MODEL` before launching `claude`. Claude Code reads this once at startup, so **changes do not take effect in a running session** — restart `oc` to apply them. The numbered menu offers `0` (default/unset), `1..N` (installed Ollama models routed as `ollama-local:<name>`), and Anthropic models (e.g. Haiku, using your subscription). If the configured model is no longer installed at `oc start`, the router falls back to the Anthropic default and warns. `oc status` shows both the configured value and the value active in the current session.
+**How it works:** `openclaude model-subagent` writes a `subagentModel` key to `~/.openclaude/config.json`. On the next `oc start`, the router sets `CLAUDE_CODE_SUBAGENT_MODEL` before launching `claude`. Claude Code reads this once at startup, so **changes do not take effect in a running session** — restart the wrapped session to apply them. The numbered menu offers `0` (default/unset), `1..N` (installed Ollama models routed as `ollama-local:<name>`), and Anthropic models (e.g. Haiku, using your subscription). If the configured model is no longer installed at `oc start`, the router falls back to the Anthropic default and warns. `oc status` shows both the configured value and the value active in the current session.
 
 ### Bridge modes for the alias slots
 
@@ -112,7 +97,7 @@ Even with discovery on, openclaude can rebind Claude Code's built-in alias slots
 
 Enable aggressive bridging with `oc start --bridge=aggressive`.
 
-> **🚫 Haiku is never bridged**, in either mode. Claude Code uses the `haiku` alias for its background safety classifier, title generation, and summarization. Routing those to Ollama makes Bash and other tools fail with `"default is temporarily unavailable"`. (To override Haiku deliberately, use `oc internal-classifier`.)
+> **🚫 Haiku is never bridged**, in either mode. Claude Code uses the `haiku` alias for its background safety classifier, title generation, and summarization. Routing those to Ollama makes Bash and other tools fail with `"default is temporarily unavailable"`. (To override Haiku deliberately, use `openclaude internal-classifier`.)
 
 ### Ollama: local & cloud
 
@@ -153,17 +138,18 @@ The default config ships `ollama-cloud` with `apiKey: "$OLLAMA_API_KEY"`; the ro
 | `oc list`                      | List installed Ollama models with paste-ready /model lines. |
 | `oc model-subagent`            | Show/select subagent model for Claude Code.                 |
 | `oc model-subagent <n>`        | Set subagent model by number (takes effect on next start).  |
-| `oc internal-classifier`       | Show/select model for Claude Code's safety classifier.      |
+| `openclaude internal-classifier`       | Show/select model for Claude Code's safety classifier.      |
 | `oc internal-classifier <n>`   | Set classifier model by number (default: Anthropic Haiku).  |
 
 ### Configuration
 
-Config lives at `~/.openclaude/config.json` (auto-seeded on first run). Add providers by editing it — changes are picked up on the next request, no daemon restart needed:
+Config lives at `~/.openclaude/config.json` (auto-seeded on first run). `ollamaAllowedModels` is an exact-name allowlist: a model must both be installed in the configured local Ollama instance and appear in this array to be exposed or routed. Add providers by editing the file:
 
 ```json
 {
   "port": 11436,
   "defaultProvider": "claude",
+  "ollamaAllowedModels": ["qwen2.5-coder:7b"],
   "providers": {
     "claude":        { "type": "anthropic-passthrough", "baseUrl": "https://api.anthropic.com" },
     "ollama-local":  { "type": "ollama", "baseUrl": "http://127.0.0.1:11434" },
