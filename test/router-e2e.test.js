@@ -48,11 +48,12 @@ function startRouter(home, port) {
   });
 }
 
-async function waitForRouter(port) {
+async function waitForRouter(port, home) {
   const deadline = Date.now() + 4000;
   while (Date.now() < deadline) {
     try {
-      const r = await fetch(`http://127.0.0.1:${port}/openclaude/status`);
+      const token = (await readFile(join(home, "router.token"), "utf8")).trim();
+      const r = await fetch(`http://127.0.0.1:${port}/openclaude/status`, { headers: { "x-openclaude-token": token } });
       if (r.ok) return;
     } catch {}
     await new Promise((r) => setTimeout(r, 50));
@@ -82,7 +83,7 @@ test("router e2e: natural model IDs, OAuth pass-through, no leak across provider
 
   const router = await startRouter(home, ROUTER_PORT);
   t.after(() => { try { router.kill("SIGTERM"); } catch {} });
-  await waitForRouter(ROUTER_PORT);
+  await waitForRouter(ROUTER_PORT, home);
   const routerToken = (await readFile(join(home, "router.token"), "utf8")).trim();
 
   // 1. Bare alias → default provider (anthropic-passthrough), Authorization preserved
