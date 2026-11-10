@@ -154,6 +154,7 @@ async function handleMessages(req, res, cfg, upstreamPath = "/v1/messages") {
 }
 
 export async function createRouter() {
+  await loadRouterToken();
   let cfg = await loadConfig();
   const reload = async () => {
     try { cfg = await loadConfig(); } catch (err) { log("config reload failed:", err.message); }
