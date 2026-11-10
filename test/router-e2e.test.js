@@ -84,6 +84,8 @@ test("router e2e: natural model IDs, OAuth pass-through, no leak across provider
   const router = await startRouter(home, ROUTER_PORT);
   t.after(() => { try { router.kill("SIGTERM"); } catch {} });
   await waitForRouter(ROUTER_PORT, home);
+  const unauthenticated = await fetch(`http://127.0.0.1:${ROUTER_PORT}/v1/messages`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ model: "sonnet", messages: [] }) });
+  assert.equal(unauthenticated.status, 401);
   const routerToken = (await readFile(join(home, "router.token"), "utf8")).trim();
 
   // 1. Bare alias → default provider (anthropic-passthrough), Authorization preserved
