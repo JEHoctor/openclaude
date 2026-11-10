@@ -8,6 +8,7 @@ const DEFAULT_FILE = join(DEFAULT_DIR, "config.json");
 const DEFAULT_CONFIG = {
   port: 11436,
   defaultProvider: "claude",
+  ollamaAllowedModels: [],
   providers: {
     claude: {
       type: "anthropic-passthrough",
@@ -41,7 +42,7 @@ export async function loadConfig() {
   await ensureConfig();
   const raw = await readFile(DEFAULT_FILE, "utf8");
   const cfg = JSON.parse(raw);
-  return { ...DEFAULT_CONFIG, ...cfg, providers: { ...DEFAULT_CONFIG.providers, ...(cfg.providers ?? {}) } };
+  return { ...DEFAULT_CONFIG, ...cfg, providers: { ...DEFAULT_CONFIG.providers, ...(cfg.providers ?? {}) }, ollamaAllowedModels: Array.isArray(cfg.ollamaAllowedModels) ? cfg.ollamaAllowedModels : [] };
 }
 
 export async function saveConfig(cfg) {
