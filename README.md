@@ -134,7 +134,6 @@ Config lives at `~/.openclaude/config.json` (auto-seeded on first run). `ollamaA
 
 ```json
 {
-  "port": 11436,
   "defaultProvider": "claude",
   "ollamaAllowedModels": ["qwen2.5-coder:7b"],
   "providers": {
@@ -178,7 +177,7 @@ The router probes each Ollama model's capabilities via `/api/show` (cached in-pr
 
 Ollama's Anthropic-compat layer occasionally emits a `content_block_delta` event for an index it never opened with `content_block_start` — Claude Code's stream parser then aborts with `"Content block not found"` and retries forever (seen on multimodal models like `kimi-k2.6:cloud`). The router wraps every Ollama streaming response in a sanitizer (`src/router/stream-fixup.js`) that tracks open content-block indices, synthesizes the missing `content_block_start` for orphan deltas (matching type — text, thinking, or tool_use with a placeholder id), tracks `content_block_stop` so re-used indices re-synthesize, and passes everything else through byte-for-byte. Anthropic-passthrough responses (real Claude) are never touched.
 
-The router is also resilient to upstream streams that fail *after* forwarding has begun (e.g. an upstream body timeout): the partial response is closed cleanly and the daemon keeps serving rather than crashing.
+The per-run router handles upstream stream failures by closing partial responses cleanly; it exits when the wrapped Claude process ends.
 
 ### Tests
 
@@ -186,7 +185,7 @@ The router is also resilient to upstream streams that fail *after* forwarding ha
 npm test
 ```
 
-Node's built-in test runner covers `parseModelTarget` routing; a real-router-vs-stub e2e (OAuth pass-through, Ollama `x-api-key`, no header leakage, discovery decoding); the SSE sanitizer; image stripping; tool-use id + thinking-signature sanitization; subagent-model resolution/config round-trip; and the mid-stream upstream-failure regression.
+Node's built-in test runner covers `parseModelTarget` routing; a real-router-vs-stub e2e (OAuth pass-through, Ollama `x-api-key`, no header leakage, allowlist enforcement); the SSE sanitizer; image stripping; tool-use id + thinking-signature sanitization; subagent-model resolution/config round-trip; and the mid-stream upstream-failure regression.
 
 </details>
 
