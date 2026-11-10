@@ -7,6 +7,7 @@ const TOKEN_FILE = join(paths.dir, "router.token");
 
 export async function loadRouterToken() {
   await mkdir(paths.dir, { recursive: true, mode: 0o700 });
+  await chmod(paths.dir, 0o700).catch(() => {});
   try {
     const token = (await readFile(TOKEN_FILE, "utf8")).trim();
     if (/^[a-f0-9]{64}$/.test(token)) {
