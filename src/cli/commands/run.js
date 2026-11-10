@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { loadConfig } from "../../router/config.js";
 import { startRouter } from "../../router/index.js";
-import { listLocalOllamaModels } from "../ollama.js";
+import { listLocalOllamaModels } from "../ollama.js";\nimport { resolveSubagentModel } from "./model-subagent.js";\nimport { resolveInternalClassifierModel } from "./model-internal-classifier.js";
 
 function describe(model) {
   return "Local Ollama · " + (model.parameter_size ?? "") + " " + (model.family ?? "");
@@ -38,7 +38,7 @@ export async function run(args) {
   console.error("[openclaude] private session router: http://127.0.0.1:" + router.port);
   console.error("[openclaude] allowlisted Ollama models: " + (models.map((m) => m.name).join(", ") || "(none)"));
 
-  const child = spawn("claude", args, { stdio: "inherit", env });
+  const subagent = resolveSubagentModel(cfg.subagentModel, models, cfg);\n  if (subagent.warning) console.error("[openclaude] WARNING: " + subagent.warning);\n  if (subagent.envValue) env.CLAUDE_CODE_SUBAGENT_MODEL = subagent.envValue;\n  const classifier = resolveInternalClassifierModel(cfg.internalClassifierModel, models, cfg);\n  if (classifier.warning) console.error("[openclaude] WARNING: " + classifier.warning);\n  if (classifier.envValue) env.ANTHROPIC_DEFAULT_HAIKU_MODEL = classifier.envValue;\n\n  const child = spawn("claude", args, { stdio: "inherit", env });
   let closing = false;
   const closeRouter = async () => {
     if (closing) return;
