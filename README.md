@@ -18,18 +18,24 @@ openclaude is a small wrapper around the `claude` CLI. The ordinary `claude` com
 # 1. Install
 npm install -g @aliildan/openclaude
 
-# 2. Pull the model you intend to expose
+# 2. Run once to create ~/.openclaude/config.json, then exit Claude Code
+openclaude run
+
+# 3. Pull the model you intend to expose and add its exact name to config
 ollama pull qwen2.5-coder:7b
+# Edit ~/.openclaude/config.json: "ollamaAllowedModels": ["qwen2.5-coder:7b"]
 
-# 3. Add its exact Ollama model name to ~/.openclaude/config.json:
-#    "ollamaAllowedModels": ["qwen2.5-coder:7b"]
-
-# 4. Run Claude Code through the isolated wrapper
+# 4. Launch the wrapped session
 openclaude run
 
 # Optional: print the alias line to add to ~/.bashrc or ~/.zshrc
 openclaude shell-init
 ```
+
+<!-- QUICKSTART_END -->
+
+<!--
+#    "ollamaAllowedModels": ["qwen2.5-coder:7b"]
 
 `openclaude run` starts a private router on an ephemeral localhost port, generates a random per-session token in memory, and launches `claude` with only the wrapper-specific environment overrides. The router is shut down when Claude exits. `openclaude shell-init` prints `alias oclaude="openclaude run"`; add that line to your shell rc file and use `oclaude` when you want the wrapped session. The regular `claude` command remains unchanged.
 
@@ -68,7 +74,7 @@ When you select a model in `/model`:
 
 openclaude does not read Claude Code's credential file or macOS Keychain, and it never substitutes or stores your Anthropic OAuth token. Claude Code authenticates to Anthropic using its own normal subscription session; openclaude forwards those upstream authorization headers unchanged. The wrapper adds its exact `127.0.0.1:<port>` endpoint to `ANTHROPIC_FIRST_PARTY_PROXY_HOSTS`, which tells Claude Code to retain OAuth authentication for this loopback proxy.
 
-Each `openclaude run` creates a router on an ephemeral localhost port and generates a fresh random local-hop token held only in the wrapper and child-process environment. It is supplied to Claude Code using `ANTHROPIC_CUSTOM_HEADERS`; it is not written to disk or forwarded to Anthropic or Ollama. The router closes when the session exits. The wrapper sets `ANTHROPIC_FIRST_PARTY_PROXY_HOSTS` for its exact loopback endpoint so Claude Code retains subscription OAuth through the proxy. The normal `claude` process environment and configuration are not modified.
+Each `openclaude run` creates a router on an ephemeral localhost port and generates a fresh random local-hop token held only in the wrapper and child-process environment. It is supplied to Claude Code using `ANTHROPIC_CUSTOM_HEADERS`; it is not written to disk or forwarded to Anthropic or Ollama. The router closes when the session exits. The normal `claude` process environment and configuration are not modified.
 
 Model discovery is deliberately disabled. Only exact names in `ollamaAllowedModels` are exposed and permitted by the router. The first installed allowlisted model occupies the Custom picker slot; other allowlisted models can be selected with `/model ollama-local:<name>`. The allowlist is enforced server-side too, so manually typing an unlisted model name is rejected.
 
