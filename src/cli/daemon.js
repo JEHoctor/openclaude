@@ -3,6 +3,7 @@ import { readFile, writeFile, unlink } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { paths, ensureConfig, loadConfig } from "../router/config.js";
+import { loadRouterToken } from "../router/auth.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PID_FILE = join(paths.dir, "router.pid");
@@ -56,7 +57,8 @@ export async function ensureDaemonRunning() {
   const deadline = Date.now() + 5000;
   while (Date.now() < deadline) {
     try {
-      const res = await fetch(`http://127.0.0.1:${port}/openclaude/status`);
+      const token = await loadRouterToken();
+      const res = await fetch(`http://127.0.0.1:${port}/openclaude/status`, { headers: { "x-openclaude-token": token } });
       if (res.ok) return { running: true, pid: child.pid, port, configPath: paths.file };
     } catch {}
     await new Promise((r) => setTimeout(r, 100));
