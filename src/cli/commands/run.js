@@ -2,7 +2,9 @@ import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { loadConfig } from "../../router/config.js";
 import { startRouter } from "../../router/index.js";
-import { listLocalOllamaModels } from "../ollama.js";\nimport { resolveSubagentModel } from "./model-subagent.js";\nimport { resolveInternalClassifierModel } from "./model-internal-classifier.js";
+import { listLocalOllamaModels } from "../ollama.js";
+import { resolveSubagentModel } from "./model-subagent.js";
+import { resolveInternalClassifierModel } from "./model-internal-classifier.js";
 
 function describe(model) {
   return "Local Ollama · " + (model.parameter_size ?? "") + " " + (model.family ?? "");
@@ -25,9 +27,11 @@ export async function run(args) {
   delete env.ANTHROPIC_AUTH_TOKEN;
   delete env.ANTHROPIC_API_KEY;
   delete env.CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY;
-  const customHeaders = (env.ANTHROPIC_CUSTOM_HEADERS || "").split(/\r?\n/).filter((line) => line.split(":", 1)[0].trim().toLowerCase() !== "x-openclaude-token");
+  const customHeaders = (env.ANTHROPIC_CUSTOM_HEADERS || "").split(/\r?
+/).filter((line) => line.split(":", 1)[0].trim().toLowerCase() !== "x-openclaude-token");
   customHeaders.push("x-openclaude-token: " + token);
-  env.ANTHROPIC_CUSTOM_HEADERS = customHeaders.filter(Boolean).join("\n");
+  env.ANTHROPIC_CUSTOM_HEADERS = customHeaders.filter(Boolean).join("
+");
 
   if (models[0]) {
     env.ANTHROPIC_CUSTOM_MODEL_OPTION = "ollama-local:" + models[0].name;
@@ -38,7 +42,14 @@ export async function run(args) {
   console.error("[openclaude] private session router: http://127.0.0.1:" + router.port);
   console.error("[openclaude] allowlisted Ollama models: " + (models.map((m) => m.name).join(", ") || "(none)"));
 
-  const subagent = resolveSubagentModel(cfg.subagentModel, models, cfg);\n  if (subagent.warning) console.error("[openclaude] WARNING: " + subagent.warning);\n  if (subagent.envValue) env.CLAUDE_CODE_SUBAGENT_MODEL = subagent.envValue;\n  const classifier = resolveInternalClassifierModel(cfg.internalClassifierModel, models, cfg);\n  if (classifier.warning) console.error("[openclaude] WARNING: " + classifier.warning);\n  if (classifier.envValue) env.ANTHROPIC_DEFAULT_HAIKU_MODEL = classifier.envValue;\n\n  const child = spawn("claude", args, { stdio: "inherit", env });
+  const subagent = resolveSubagentModel(cfg.subagentModel, models, cfg);
+  if (subagent.warning) console.error("[openclaude] WARNING: " + subagent.warning);
+  if (subagent.envValue) env.CLAUDE_CODE_SUBAGENT_MODEL = subagent.envValue;
+  const classifier = resolveInternalClassifierModel(cfg.internalClassifierModel, models, cfg);
+  if (classifier.warning) console.error("[openclaude] WARNING: " + classifier.warning);
+  if (classifier.envValue) env.ANTHROPIC_DEFAULT_HAIKU_MODEL = classifier.envValue;
+
+  const child = spawn("claude", args, { stdio: "inherit", env });
   let closing = false;
   const closeRouter = async () => {
     if (closing) return;
