@@ -43,7 +43,7 @@ test("router e2e: ephemeral token auth, OAuth pass-through, no leak across provi
       "fake-ollama": { type: "ollama", baseUrl: "http://127.0.0.1:" + stubPort },
       "ollama-local": { type: "ollama", baseUrl: "http://127.0.0.1:" + stubPort },
     },
-    ollamaAllowedModels: ["qwen2.5:7b"],
+    ollamaAllowedModels: ["qwen2.5:7b", "gemma4:31b-cloud"],
   }));
 
   const { startRouter } = await import("../src/router/index.js");
