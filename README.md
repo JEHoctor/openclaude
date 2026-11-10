@@ -79,13 +79,13 @@ When you select a model in `/model`:
 - Picker entry **`<name> (Ollama)`** (the Custom alias slot) → routed to **local Ollama**.
 - Anything you type, e.g. `/model ollama-local:gemma4:31b-cloud` → routed by parsing the prefix.
 
-### Discovery mode (default ON)
+### Authentication and local trust boundary
 
-To get **all** your Ollama models in the picker, openclaude sets `ANTHROPIC_AUTH_TOKEN` to a sentinel before launching `claude`. This makes Claude Code trigger gateway model discovery — Claude Code calls `GET /v1/models` on our router and the router enumerates every installed Ollama model.
+openclaude does not read Claude Code's credential file or macOS Keychain, and it never substitutes or stores your Anthropic OAuth token. Claude Code authenticates to Anthropic using its own normal subscription session; openclaude forwards those upstream authorization headers unchanged.
 
-For inference, the router intercepts the sentinel token in the `Authorization` header and substitutes the **live OAuth bearer** read from `~/.claude/.credentials.json` (re-read on every request, so token rotation is handled). Your subscription still pays for Anthropic-bound traffic.
+The router also requires a separate random local-hop token on inference and status requests. It is generated once in `~/.openclaude/router.token` with mode `0600` and supplied to Claude Code using `ANTHROPIC_CUSTOM_HEADERS` (Claude Code ≥ v2.1.227). The token is not forwarded to Anthropic or Ollama. The listener remains bound to `127.0.0.1`.
 
-> **Side-effect of setting `ANTHROPIC_AUTH_TOKEN`** (per Claude Code's own changelog): the following are **disabled** for the session — Remote Control, `/schedule`, claude.ai MCP connectors, notification preferences. Subscription inference and everything else is unaffected. Pass `oc start --no-discovery` to keep them, at the cost of seeing fewer Ollama models in the picker.
+Model discovery is deliberately disabled. This avoids the sentinel-token workaround, credential-store access, and associated feature restrictions. The Custom picker slot remains available for one Ollama model; other models can be selected by entering `/model ollama-local:<name>`.
 
 ## Guides
 
