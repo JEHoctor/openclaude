@@ -21,7 +21,7 @@ Usage:
 Notes:
   - Authentication: Claude Code's normal OAuth subscription is preserved.
     The router forwards the Authorization header to api.anthropic.com untouched.
-  - The /model picker shows ONE Ollama model by default (the Custom slot).
+  - The /model picker exposes one Ollama model through the Custom slot.
     For more, paste "/model ollama-local:<name>" into /model — these don't
     show display names but they work.
   - internal-classifier overrides Claude Code's built-in Haiku model used for
