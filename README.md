@@ -68,7 +68,7 @@ When you select a model in `/model`:
 
 openclaude does not read Claude Code's credential file or macOS Keychain, and it never substitutes or stores your Anthropic OAuth token. Claude Code authenticates to Anthropic using its own normal subscription session; openclaude forwards those upstream authorization headers unchanged. The wrapper adds its exact `127.0.0.1:<port>` endpoint to `ANTHROPIC_FIRST_PARTY_PROXY_HOSTS`, which tells Claude Code to retain OAuth authentication for this loopback proxy.
 
-Each `openclaude run` creates a router on an ephemeral localhost port and generates a fresh random local-hop token held only in the wrapper and child-process environment. It is supplied to Claude Code using `ANTHROPIC_CUSTOM_HEADERS`; it is not written to disk or forwarded to Anthropic or Ollama. The router closes when the session exits. The normal `claude` process environment and configuration are not modified.
+Each `openclaude run` creates a router on an ephemeral localhost port and generates a fresh random local-hop token held only in the wrapper and child-process environment. It is supplied to Claude Code using `ANTHROPIC_CUSTOM_HEADERS`; it is not written to disk or forwarded to Anthropic or Ollama. The router closes when the session exits. The wrapper sets `ANTHROPIC_FIRST_PARTY_PROXY_HOSTS` for its exact loopback endpoint so Claude Code retains subscription OAuth through the proxy. The normal `claude` process environment and configuration are not modified.
 
 Model discovery is deliberately disabled. Only exact names in `ollamaAllowedModels` are exposed and permitted by the router. The first installed allowlisted model occupies the Custom picker slot; other allowlisted models can be selected with `/model ollama-local:<name>`. The allowlist is enforced server-side too, so manually typing an unlisted model name is rejected.
 
@@ -107,11 +107,11 @@ openclaude run
 # Option A — pull cloud models into local Ollama (most common).
 # Add the exact model name to `ollamaAllowedModels` before using it through `ollama-local`.
 ollama pull gpt-oss:120b-cloud
-oc start
+openclaude run
 
 # Option B — hit ollama.com directly, no local registration.
 export OLLAMA_API_KEY=<your-key-from-ollama.com>
-oc start
+openclaude run
 # In /model: paste "/model ollama-cloud:<name>"
 ```
 
@@ -130,7 +130,7 @@ The default config ships `ollama-cloud` with `apiKey: "$OLLAMA_API_KEY"`; the ro
 
 ### Configuration
 
-Config lives at `~/.openclaude/config.json` (auto-seeded on first run). `ollamaAllowedModels` is an exact-name allowlist: a model must both be installed in the configured local Ollama instance and appear in this array to be exposed or routed. Add providers by editing the file:
+Config lives at `~/.openclaude/config.json` (auto-seeded on first run). `ollamaAllowedModels` is an exact model-name allowlist applied to every Ollama provider. A local model appears in the Custom picker only when it is both installed locally and listed here; cloud or remote models can be selected manually when their exact model name is listed. Add providers by editing the file:
 
 ```json
 {
