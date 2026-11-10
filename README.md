@@ -12,7 +12,7 @@ openclaude is a small wrapper around the `claude` CLI. The ordinary `claude` com
 
 ## Quickstart
 
-**Requirements:** [Claude Code](https://claude.com/claude-code) ≥ v2.1.129 (logged in), [Node.js](https://nodejs.org) ≥ 20, and — optionally — [Ollama](https://ollama.com/download) if you want to route to Ollama models.
+**Requirements:** [Claude Code](https://claude.com/claude-code) ≥ v2.1.227 (logged in; required for per-session custom headers), [Node.js](https://nodejs.org) ≥ 20, and — optionally — [Ollama](https://ollama.com/download) if you want to route to Ollama models.
 
 ```bash
 # 1. Install
