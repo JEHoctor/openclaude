@@ -32,11 +32,6 @@ openclaude run
 openclaude shell-init
 ```
 
-<!-- QUICKSTART_END -->
-
-<!--
-#    "ollamaAllowedModels": ["qwen2.5-coder:7b"]
-
 `openclaude run` starts a private router on an ephemeral localhost port, generates a random per-session token in memory, and launches `claude` with only the wrapper-specific environment overrides. The router is shut down when Claude exits. `openclaude shell-init` prints `alias oclaude="openclaude run"`; add that line to your shell rc file and use `oclaude` when you want the wrapped session. The regular `claude` command remains unchanged.
 
 Upgrade any time with `npm install -g @aliildan/openclaude@latest`. The package is scoped (`@aliildan/openclaude`), but the commands stay `oc` / `openclaude`, and `openclaude run` works from any directory on Linux, macOS, and Windows.
