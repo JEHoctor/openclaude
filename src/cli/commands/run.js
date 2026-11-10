@@ -18,6 +18,12 @@ export function createClaudeEnvironment(parentEnv, port, token, models, cfg) {
   delete env.ANTHROPIC_AUTH_TOKEN;
   delete env.ANTHROPIC_API_KEY;
   delete env.CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY;
+  // Claude Code otherwise treats a custom ANTHROPIC_BASE_URL as a third-party
+  // provider and drops subscription OAuth. Explicitly trust only this exact
+  // loopback host:port for this child process.
+  const proxyHosts = new Set(String(env.ANTHROPIC_FIRST_PARTY_PROXY_HOSTS || "").split(",").map((host) => host.trim()).filter(Boolean));
+  proxyHosts.add("127.0.0.1:" + port);
+  env.ANTHROPIC_FIRST_PARTY_PROXY_HOSTS = [...proxyHosts].join(",");
 
   // Replace only our private header; preserve unrelated custom headers.
   const customHeaders = String(env.ANTHROPIC_CUSTOM_HEADERS || "")
