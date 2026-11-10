@@ -87,11 +87,10 @@ export async function run(args) {
   const closeRouter = async () => {
     await new Promise((resolve) => {
       router.server.close(resolve);
-      // Do not let an idle keep-alive socket keep the wrapper alive after the
-      // Claude child has exited. Active requests are allowed to finish.
-      router.server.closeIdleConnections?.();
+      // Claude has exited, so no in-flight router request can still be useful.
+      // Force-close keep-alive and active sockets to guarantee shutdown.
+      router.server.closeAllConnections?.();
     });
-    router.server.closeAllConnections?.();
   };
 
   for (const signal of signals) process.on(signal, onSignal);
