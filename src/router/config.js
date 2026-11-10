@@ -1,4 +1,4 @@
-import { readFile, writeFile, mkdir, stat } from "node:fs/promises";
+import { readFile, writeFile, mkdir, stat, chmod } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -29,12 +29,17 @@ const DEFAULT_CONFIG = {
 export const paths = { dir: DEFAULT_DIR, file: DEFAULT_FILE };
 
 export async function ensureConfig() {
+  await mkdir(DEFAULT_DIR, { recursive: true, mode: 0o700 });
+  // Config can contain provider API keys. Restrict both the directory and file
+  // even when upgrading an installation created by an older version.
+  await chmod(DEFAULT_DIR, 0o700);
   try {
     await stat(DEFAULT_FILE);
-  } catch {
-    await mkdir(DEFAULT_DIR, { recursive: true });
-    await writeFile(DEFAULT_FILE, JSON.stringify(DEFAULT_CONFIG, null, 2) + "\n");
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+    await writeFile(DEFAULT_FILE, JSON.stringify(DEFAULT_CONFIG, null, 2) + "\n", { mode: 0o600, flag: "wx" });
   }
+  await chmod(DEFAULT_FILE, 0o600);
   return DEFAULT_FILE;
 }
 
@@ -47,7 +52,8 @@ export async function loadConfig() {
 
 export async function saveConfig(cfg) {
   await ensureConfig();
-  await writeFile(DEFAULT_FILE, JSON.stringify(cfg, null, 2) + "\n");
+  await writeFile(DEFAULT_FILE, JSON.stringify(cfg, null, 2) + "\n", { mode: 0o600 });
+  await chmod(DEFAULT_FILE, 0o600);
 }
 
 export function interpolateEnv(value) {
