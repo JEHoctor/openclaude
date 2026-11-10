@@ -68,7 +68,7 @@ async function handleMessages(req, res, cfg, upstreamPath = "/v1/messages") {
 
   const { providerId, modelId } = parseModelTarget(body.model, cfg);
   const provider = cfg.providers?.[providerId];
-  if (provider?.type === "ollama" && !(cfg.ollamaAllowedModels ?? []).includes(modelId)) {
+  if (provider?.type === "ollama" && providerId === "ollama-local" && !(cfg.ollamaAllowedModels ?? []).includes(modelId)) {
     return sendJson(res, 403, { type: "error", error: { type: "permission_error", message: `Ollama model "${modelId}" is not in ollamaAllowedModels` } });
   }
   if (!provider) {
