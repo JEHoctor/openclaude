@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
-import { writeFile, mkdir, rm } from "node:fs/promises";
+import { writeFile, mkdir, rm, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { spawn } from "node:child_process";
@@ -83,11 +83,12 @@ test("router e2e: natural model IDs, OAuth pass-through, no leak across provider
   const router = await startRouter(home, ROUTER_PORT);
   t.after(() => { try { router.kill("SIGTERM"); } catch {} });
   await waitForRouter(ROUTER_PORT);
+  const routerToken = (await readFile(join(home, "router.token"), "utf8")).trim();
 
   // 1. Bare alias → default provider (anthropic-passthrough), Authorization preserved
   const r1 = await fetch(`http://127.0.0.1:${ROUTER_PORT}/v1/messages`, {
     method: "POST",
-    headers: { "content-type": "application/json", "authorization": "Bearer my-oauth-token" },
+    headers: { "x-openclaude-token": routerToken, "content-type": "application/json", "authorization": "Bearer my-oauth-token" },
     body: JSON.stringify({ model: "sonnet", messages: [{ role: "user", content: "hi" }] }),
   });
   assert.equal(r1.status, 200);
@@ -97,7 +98,7 @@ test("router e2e: natural model IDs, OAuth pass-through, no leak across provider
   // 2. fake-ollama:gemma4:31b-cloud → ollama with model rewritten + x-api-key
   const r2 = await fetch(`http://127.0.0.1:${ROUTER_PORT}/v1/messages`, {
     method: "POST",
-    headers: { "content-type": "application/json", "authorization": "Bearer should-not-leak" },
+    headers: { "x-openclaude-token": routerToken, "content-type": "application/json", "authorization": "Bearer should-not-leak" },
     body: JSON.stringify({ model: "fake-ollama:gemma4:31b-cloud", messages: [{ role: "user", content: "hi" }] }),
   });
   assert.equal(r2.status, 200);
@@ -114,24 +115,12 @@ test("router e2e: natural model IDs, OAuth pass-through, no leak across provider
   assert.equal(r3.status, 200);
   assert.equal(seen.at(-1).body.model, "claude-opus-4-7");
 
-  // 4. /v1/models discovery — for an offline ollama provider, returns 0 entries
-  //    (it only enumerates ollama providers; the stub doesn't speak /api/tags).
-  //    This covers the "no models — empty data" path.
-  const r4 = await fetch(`http://127.0.0.1:${ROUTER_PORT}/v1/models`);
-  assert.equal(r4.status, 200);
-  const list = await r4.json();
-  assert.ok(Array.isArray(list.data), "/v1/models returns data array");
+  // Discovery is disabled; the endpoint is not exposed.
+  const discovery = await fetch(`http://127.0.0.1:${ROUTER_PORT}/v1/models`);
+  assert.equal(discovery.status, 404);
 
   // 5. HEAD / and GET / both 200 (Claude Code reachability probe)
   const r5 = await fetch(`http://127.0.0.1:${ROUTER_PORT}/`, { method: "HEAD" });
   assert.equal(r5.status, 200);
 
-  // 6. claude-ol-<provider>:<model> id from gateway discovery decodes correctly
-  const r6 = await fetch(`http://127.0.0.1:${ROUTER_PORT}/v1/messages`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ model: "claude-ol-fake-ollama:llama3:8b", messages: [{ role: "user", content: "hi" }] }),
-  });
-  assert.equal(r6.status, 200);
-  assert.equal(seen.at(-1).body.model, "llama3:8b", "claude-ol- prefix must be stripped before forwarding");
 });
