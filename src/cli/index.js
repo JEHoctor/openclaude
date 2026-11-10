@@ -22,7 +22,7 @@ Config: ~/.openclaude/config.json
 
 const COMMANDS = {
   run,
-  "shell-init": () => console.log(`alias oclaude="openclaude run"`),
+  "shell-init": () => console.log("alias oclaude='openclaude run'"),
   "model-subagent": modelSubagent,
   "internal-classifier": modelInternalClassifier,
   help: () => console.log(HELP),
