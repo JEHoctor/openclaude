@@ -31,7 +31,7 @@ openclaude run
 openclaude shell-init
 ```
 
-`openclaude run` starts a private router on an ephemeral localhost port, generates a random per-session token in memory, and launches `claude` with only the wrapper-specific environment overrides. The router is shut down when Claude exits. `openclaude shell-init` prints `alias oclaude='openclaude run'`; add that line to your shell rc file and use `oclaude` when you want the wrapped session. The regular `claude` command remains unchanged.
+`openclaude run` starts a private router on an ephemeral localhost port, generates a random per-session token in memory, and launches `claude` with only the wrapper-specific environment overrides. The router is shut down when Claude exits. `openclaude shell-init` prints `alias oclaude="openclaude run"`; add that line to your shell rc file and use `oclaude` when you want the wrapped session. The regular `claude` command remains unchanged.
 
 Upgrade any time with `npm install -g @aliildan/openclaude@latest`. The package is scoped (`@aliildan/openclaude`), but the commands stay `oc` / `openclaude`, and `openclaude run` works from any directory on Linux, macOS, and Windows.
 
@@ -60,13 +60,13 @@ Upgrade any time with `npm install -g @aliildan/openclaude@latest`. The package 
 
 When you select a model in `/model`:
 - Picker entry **`Default` / `Sonnet` / `Opus` / `Haiku`** → routed to **real Anthropic** via your subscription.
-- Picker entries **`<ollama-name> (ollama-local)`** (auto-discovered from your Ollama install) → routed to **local Ollama**.
+- Only models explicitly allowlisted in `ollamaAllowedModels` can be selected for local Ollama.
 - Picker entry **`<name> (Ollama)`** (the Custom alias slot) → routed to **local Ollama**.
 - Anything you type, e.g. `/model ollama-local:gemma4:31b-cloud` → routed by parsing the prefix.
 
 ### Authentication and local trust boundary
 
-openclaude does not read Claude Code's credential file or macOS Keychain, and it never substitutes or stores your Anthropic OAuth token. Claude Code authenticates to Anthropic using its own normal subscription session; openclaude forwards those upstream authorization headers unchanged.
+openclaude does not read Claude Code's credential file or macOS Keychain, and it never substitutes or stores your Anthropic OAuth token. Claude Code authenticates to Anthropic using its own normal subscription session; openclaude forwards those upstream authorization headers unchanged. The wrapper adds its exact `127.0.0.1:<port>` endpoint to `ANTHROPIC_FIRST_PARTY_PROXY_HOSTS`, which tells Claude Code to retain OAuth authentication for this loopback proxy.
 
 Each `openclaude run` creates a router on an ephemeral localhost port and generates a fresh random local-hop token held only in the wrapper and child-process environment. It is supplied to Claude Code using `ANTHROPIC_CUSTOM_HEADERS`; it is not written to disk or forwarded to Anthropic or Ollama. The router closes when the session exits. The normal `claude` process environment and configuration are not modified.
 
