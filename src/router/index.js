@@ -205,17 +205,8 @@ export async function createRouter({ token }) {
 }
 
 export async function startRouter(port = 0, token) {
-  // The router runs detached with no supervisor to restart it, so a single
-  // unhandled error must not be fatal — otherwise every later request from
-  // Claude Code fails with a connection error until the user restarts. Log and
-  // keep serving instead of letting Node exit on an unhandled rejection.
-  process.on("unhandledRejection", (reason) => {
-    log("unhandledRejection:", reason instanceof Error ? reason.stack : reason);
-  });
-  process.on("uncaughtException", (err) => {
-    log("uncaughtException:", err?.stack ?? err);
-  });
-
+  // The router shares the wrapper's process. Request-level failures are handled
+  // by the HTTP handler; process-wide exception handlers would mask fatal bugs.
   const { server } = await createRouter({ token });
   const listenPort = port ?? 0;
   await new Promise((resolve, reject) => {
