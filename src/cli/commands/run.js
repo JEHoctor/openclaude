@@ -79,29 +79,43 @@ export async function run(args) {
   console.error("[openclaude] private session router listening on 127.0.0.1:" + router.port);
   console.error("[openclaude] allowlisted Ollama models: " + (models.map((m) => m.name).join(", ") || "(none)"));
 
-  const child = spawn("claude", args, { stdio: "inherit", env });
-  let closing = false;
-  const closeRouter = async () => {
-    if (closing) return;
-    closing = true;
-    await new Promise((resolve) => router.server.close(resolve));
-  };
+  let child;
   const signals = ["SIGINT", "SIGTERM", "SIGHUP"];
   const onSignal = (signal) => {
-    if (child.exitCode === null && child.signalCode === null) child.kill(signal);
+    if (child && child.exitCode === null && child.signalCode === null) child.kill(signal);
   };
+  const closeRouter = async () => {
+    await new Promise((resolve) => {
+      router.server.close(resolve);
+      // Do not let an idle keep-alive socket keep the wrapper alive after the
+      // Claude child has exited. Active requests are allowed to finish.
+      router.server.closeIdleConnections?.();
+    });
+    router.server.closeAllConnections?.();
+  };
+
   for (const signal of signals) process.on(signal, onSignal);
-  await new Promise((resolve) => {
-    child.once("error", (error) => {
-      console.error("[openclaude] unable to launch claude: " + error.message);
-      process.exitCode = 127;
-      resolve();
+  try {
+    child = spawn("claude", args, { stdio: "inherit", env });
+    await new Promise((resolve) => {
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        resolve();
+      };
+      child.once("error", (error) => {
+        console.error("[openclaude] unable to launch claude: " + error.message);
+        process.exitCode = 127;
+        finish();
+      });
+      child.once("exit", (code, signal) => {
+        process.exitCode = code ?? ({ SIGINT: 130, SIGTERM: 143, SIGHUP: 129 }[signal] ?? 1);
+        finish();
+      });
     });
-    child.once("exit", (code, signal) => {
-      process.exitCode = code ?? ({ SIGINT: 130, SIGTERM: 143, SIGHUP: 129 }[signal] ?? 1);
-      resolve();
-    });
-  });
-  for (const signal of signals) process.off(signal, onSignal);
-  await closeRouter();
+  } finally {
+    for (const signal of signals) process.off(signal, onSignal);
+    await closeRouter();
+  }
 }
