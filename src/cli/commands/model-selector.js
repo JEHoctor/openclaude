@@ -3,7 +3,7 @@
 // model (or back to the Anthropic default). The logic is identical aside from
 // the config key, active-file name, default label, and a few strings.
 
-import { loadConfig, saveConfig, parseModelTarget, paths } from "../../router/config.js";
+import { loadConfig, saveConfig, parseModelTarget } from "../../router/config.js";
 import { listLocalOllamaModels } from "../ollama.js";
 import { createInterface } from "node:readline";
 import { stdin, stdout } from "node:process";
@@ -100,7 +100,7 @@ export function createModelSelector({
   async function promptForSelection(entries, configured) {
     const isTty = stdout.isTTY && stdin.isTTY;
     if (!isTty) {
-      console.log(`Stdin is not a TTY. Run 'oc ${cliName} <number>' to select.`);
+      console.log(`Stdin is not a TTY. Run 'openclaude ${cliName} <number>' to select.`);
       return null;
     }
 
@@ -121,7 +121,7 @@ export function createModelSelector({
     if (index < 0 || index >= entries.length) {
       console.error(`Invalid selection: ${answer}`);
       printMenu(entries, configured);
-      console.log(`Run 'oc ${cliName} <number>' to select.`);
+      console.log(`Run 'openclaude ${cliName} <number>' to select.`);
       process.exit(1);
     }
     return index;
