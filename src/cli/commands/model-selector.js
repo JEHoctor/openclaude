@@ -130,7 +130,9 @@ export function createModelSelector({
   async function command(args) {
     const cfg = await loadConfig();
     const ollamaBase = cfg.providers?.["ollama-local"]?.baseUrl || "http://127.0.0.1:11434";
-    const installed = await listLocalOllamaModels(ollamaBase);\n    const allowed = new Set(cfg.ollamaAllowedModels ?? []);\n    const ollamaModels = installed.filter((model) => allowed.has(model.name));
+    const installed = await listLocalOllamaModels(ollamaBase);
+    const allowed = new Set(cfg.ollamaAllowedModels ?? []);
+    const ollamaModels = installed.filter((model) => allowed.has(model.name));
     const entries = buildModelList(ollamaModels);
     const configured = cfg[configKey] ?? null;
 
