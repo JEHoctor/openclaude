@@ -145,7 +145,6 @@ Config lives at `~/.openclaude/config.json` (auto-seeded on first run). `ollamaA
 }
 ```
 
-> The daemon writes its pid/log/config under `~/.openclaude/` (or `%USERPROFILE%\.openclaude\` on Windows). Override with `OPENCLAUDE_HOME=/some/path`.
 
 ### Auth model
 
